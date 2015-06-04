@@ -10,7 +10,11 @@
     /[if lt IE 9]
       %script{:src => "http://cdn.bootcss.com/html5shiv/3.7.2/html5shiv.min.js"}
       %script{:src => "http://cdn.bootcss.com/respond.js/1.4.2/respond.min.js"}
+      
+    %script{:src => "/node_modules/yamljs/dist/yaml.min.js"}  
     %script{:src => "/node_modules/jquery/dist/jquery.min.js"}
     %script{:src => "/dist/js/yaml_to_form.js"}
+    %script{:src => "/dist/js/demo.js"}
 
-  %body 我是例子
+  %body
+    .container
