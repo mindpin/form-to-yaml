@@ -142,7 +142,7 @@
 
   YamlToForm.load_config = function(yaml_url, fun) {
     var config, ytf;
-    config = YAML.load('/dist/yaml/config.yaml');
+    config = YAML.load(yaml_url);
     ytf = new YamlToForm(config);
     return fun(ytf);
   };

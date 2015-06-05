@@ -163,7 +163,7 @@ class YamlToForm
 
 YamlToForm.load_config = (yaml_url, fun)->
   # 读取 yaml 配置
-  config = YAML.load('/dist/yaml/config.yaml')
+  config = YAML.load(yaml_url)
   ytf = new YamlToForm(config)
   fun(ytf)
 
