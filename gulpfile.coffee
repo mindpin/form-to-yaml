@@ -7,15 +7,20 @@ plumber = require 'gulp-plumber'
 
 haml    = require 'gulp-ruby-haml'
 
+sass    = require 'gulp-ruby-sass'
+
 options =
   src:
     js: "src/js/**/*.coffee"
     html: "src/demo/**/*.haml"
     yaml: "src/yaml/**/*.yaml"
+    # css:  "src/css/"
+    css:  "src/css/**/*.css"
   dist:
     js: "dist/js"
     html: "dist/demo"
     yaml: "dist/yaml"
+    css:  "dist/css"
 
 gulp.task "js", ->
   gulp.src options.src.js
@@ -38,9 +43,20 @@ gulp.task "yaml", ->
   gulp.src options.src.yaml
     .pipe gulp.dest(options.dist.yaml)
 
-gulp.task "build", ["js", "html", "yaml"]
+# gulp.task "css", ->
+#   return sass options.src.css
+#   .on "error", (err)->
+#     console.error "Error!", err.message
+#   .pipe gulp.dest(options.dist.css)
+gulp.task "css", ->
+  gulp.src options.src.css
+    .pipe gulp.dest(options.dist.css)
+
+
+gulp.task "build", ["js", "html", "yaml", "css"]
 
 gulp.task 'watch', ['build'], ->
   gulp.watch options.src.js, ['js']
   gulp.watch options.src.html, ['html']
   gulp.watch options.src.yaml, ['yaml']
+  gulp.watch options.src.css, ['css']
