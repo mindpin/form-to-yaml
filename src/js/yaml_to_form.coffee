@@ -22,7 +22,7 @@ BuildFormUtil =
     "
       <div class='form-group'>
         <label class='control-label'>#{label}</label>
-        <input type='text' class='form-control' name='#{key}' #{regex_str} #{presence_str} #{default_value_str} #{format_str}/>
+        <input type='text' class='form-control' name='#{key}' #{regex_str} #{presence_str} #{default_value_str} #{format_str} />
       </div>
     "
 
@@ -76,16 +76,15 @@ BuildFormUtil =
     "
       <div class='form-group'>
         <label class='control-label'>#{label}</label>
-        <textarea class='form-control' rows='4' name='#{key}' #{presence_str} #{regex_str}>
-          #{default_value_str}
-        </textarea>
+        <textarea class='form-control' rows='4' name='#{key}' #{presence_str} #{regex_str}>#{default_value_str}</textarea>
       </div>
     "
 
 # 把 jQuery(form).SerializeArray() 获取的数据转化成 yaml
 class SerializeArrayToYaml
-  constructor: (array, @yaml_to_form_config)->
+  constructor: (array)->
     @hash = @_array_to_hash(array)
+    @yaml = YAML.stringify(@hash)
 
   _array_to_hash: (array)->
     hash = {}
@@ -95,27 +94,23 @@ class SerializeArrayToYaml
       if names.length == 1
         hash[name] = item.value
       else
-        @_set_value_to_hash(hash, names)
+        @_set_value_to_hash(hash, names, item.value)
+    hash
 
-  _set_value_to_hash: (hash, names)->
+  _set_value_to_hash: (hash, names, value)->
     data = hash
-    while names.length > 0
+    while names.length > 1
       name = names.shift()
       arr = name.match(/([^\[]*)(\[.*\])?/)
       if arr[2]
         index = arr[2].match(/\[(.*)\]/)[1]
         if data[arr[1]] == undefined then data[arr[1]] = []
-        data[arr[1]][index] = {}
+        if data[arr[1]][index] == undefined then data[arr[1]][index] = {}
         data = data[arr[1]][index]
       else
-        data[name] = {}
+        if data[name] == undefined then data[name] = {}
         data = data[name]
-
-
-
-
-
-
+    data[names[0]] = value
 
 class YamlToForm
   constructor: (config)->
@@ -223,12 +218,14 @@ class YamlToForm
           dom_str = @_generate_init_form_input_dom_nested(new_scope, value.value)
           "
             <div class='form-group-array' data-index='0'>
+              <div class='form-template'>
+                #{dom_str}
+              </div>
               <a class='btn btn-default' href='javascript:;'>增加</a>
-              <div class='form-template'>#{dom_str}</div>
               <ul>
-                <li>#{dom_str}<li>
+                <li>#{dom_str}</li>
               </ul>
-            <div>
+            </div>
           "
         when "hash"
           new_scope.push(key)
@@ -236,7 +233,7 @@ class YamlToForm
           "
             <div class='form-group-hash'>
               #{dom_str}
-            <div>
+            </div>
           "
         when "integer"
           new_scope.push(key)
@@ -258,6 +255,11 @@ class YamlToForm
 
   render_to: ($ele)->
     jQuery(@form_dom).appendTo($ele)
+    return this
+
+  get_string: ()->
+    sat = new SerializeArrayToYaml(@form_dom.serializeArray())
+    sat.yaml
 
 YamlToForm.load_config = (yaml_url, fun)->
   # 读取 yaml 配置

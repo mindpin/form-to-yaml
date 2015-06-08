@@ -24,7 +24,7 @@
       default_value_str = value.default_value ? "value='" + value.default_value + "'" : "";
       regex_str = value.regex ? "data-regex='" + value.regex + "'" : "";
       format_str = "data-format='integer'";
-      return "<div class='form-group'> <label class='control-label'>" + label + "</label> <input type='text' class='form-control' name='" + key + "' " + regex_str + " " + presence_str + " " + default_value_str + " " + format_str + "/> </div>";
+      return "<div class='form-group'> <label class='control-label'>" + label + "</label> <input type='text' class='form-control' name='" + key + "' " + regex_str + " " + presence_str + " " + default_value_str + " " + format_str + " /> </div>";
     },
     build_dom_by_string: function(scope, value) {
       var default_value_str, format_str, key, label, presence_str, regex_str;
@@ -60,38 +60,36 @@
       presence_str = value.presence ? "data-presence='true'" : "";
       default_value_str = value.default_value ? value.default_value : "";
       regex_str = value.regex ? "data-regex='" + value.regex + "'" : "";
-      return "<div class='form-group'> <label class='control-label'>" + label + "</label> <textarea class='form-control' rows='4' name='" + key + "' " + presence_str + " " + regex_str + "> " + default_value_str + " </textarea> </div>";
+      return "<div class='form-group'> <label class='control-label'>" + label + "</label> <textarea class='form-control' rows='4' name='" + key + "' " + presence_str + " " + regex_str + ">" + default_value_str + "</textarea> </div>";
     }
   };
 
   SerializeArrayToYaml = (function() {
-    function SerializeArrayToYaml(array, yaml_to_form_config) {
-      this.yaml_to_form_config = yaml_to_form_config;
+    function SerializeArrayToYaml(array) {
       this.hash = this._array_to_hash(array);
+      this.yaml = YAML.stringify(this.hash);
     }
 
     SerializeArrayToYaml.prototype._array_to_hash = function(array) {
-      var hash, i, item, len, name, names, results;
+      var hash, i, item, len, name, names;
       hash = {};
-      results = [];
       for (i = 0, len = array.length; i < len; i++) {
         item = array[i];
         name = item.name;
         names = name.split(".");
         if (names.length === 1) {
-          results.push(hash[name] = item.value);
+          hash[name] = item.value;
         } else {
-          results.push(this._set_value_to_hash(hash, names));
+          this._set_value_to_hash(hash, names, item.value);
         }
       }
-      return results;
+      return hash;
     };
 
-    SerializeArrayToYaml.prototype._set_value_to_hash = function(hash, names) {
-      var arr, data, index, name, results;
+    SerializeArrayToYaml.prototype._set_value_to_hash = function(hash, names, value) {
+      var arr, data, index, name;
       data = hash;
-      results = [];
-      while (names.length > 0) {
+      while (names.length > 1) {
         name = names.shift();
         arr = name.match(/([^\[]*)(\[.*\])?/);
         if (arr[2]) {
@@ -99,14 +97,18 @@
           if (data[arr[1]] === void 0) {
             data[arr[1]] = [];
           }
-          data[arr[1]][index] = {};
-          results.push(data = data[arr[1]][index]);
+          if (data[arr[1]][index] === void 0) {
+            data[arr[1]][index] = {};
+          }
+          data = data[arr[1]][index];
         } else {
-          data[name] = {};
-          results.push(data = data[name]);
+          if (data[name] === void 0) {
+            data[name] = {};
+          }
+          data = data[name];
         }
       }
-      return results;
+      return data[names[0]] = value;
     };
 
     return SerializeArrayToYaml;
@@ -187,11 +189,11 @@
               key = key + "[0]";
               new_scope.push(key);
               dom_str = this._generate_init_form_input_dom_nested(new_scope, value.value);
-              return "<div class='form-group-array' data-index='0'> <a class='btn btn-default' href='javascript:;'>增加</a> <div class='form-template'>" + dom_str + "</div> <ul> <li>" + dom_str + "<li> </ul> <div>";
+              return "<div class='form-group-array' data-index='0'> <div class='form-template'> " + dom_str + " </div> <a class='btn btn-default' href='javascript:;'>增加</a> <ul> <li>" + dom_str + "</li> </ul> </div>";
             case "hash":
               new_scope.push(key);
               dom_str = this._generate_init_form_input_dom_nested(new_scope, value.value);
-              return "<div class='form-group-hash'> " + dom_str + " <div>";
+              return "<div class='form-group-hash'> " + dom_str + " </div>";
             case "integer":
               new_scope.push(key);
               return BuildFormUtil.build_dom_by_integer(new_scope, value);
@@ -215,7 +217,14 @@
     };
 
     YamlToForm.prototype.render_to = function($ele) {
-      return jQuery(this.form_dom).appendTo($ele);
+      jQuery(this.form_dom).appendTo($ele);
+      return this;
+    };
+
+    YamlToForm.prototype.get_string = function() {
+      var sat;
+      sat = new SerializeArrayToYaml(this.form_dom.serializeArray());
+      return sat.yaml;
     };
 
     return YamlToForm;
