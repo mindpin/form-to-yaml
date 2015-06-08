@@ -41,7 +41,7 @@
       key = scope.join(".");
       label = value.label ? value.label : key;
       default_value_str = value.default_value ? "checked='checked'" : "";
-      return "<div class='checkbox'> <input name='" + key + "' type='hidden' value='false' /> <label> <input name='" + key + "' type='checkbox' value='true' " + default_value_str + "> " + label + " </label> </div>";
+      return "<div class='checkbox'> <input name='" + key + "' type='hidden' value='false' /> <label> <input name='" + key + "' type='checkbox' value='true' " + default_value_str + "> <span>" + label + "</span> </label> </div>";
     },
     build_dom_by_time: function(scope, value) {
       var default_value_str, format_str, key, label, presence_str, regex_str;
@@ -66,9 +66,23 @@
 
   SerializeArrayToYaml = (function() {
     function SerializeArrayToYaml(array) {
-      this.hash = this._array_to_hash(array);
+      this.origin_array = array;
+      this.expect_template_input_array = this._expect_template_input_array(this.origin_array);
+      this.hash = this._array_to_hash(this.expect_template_input_array);
       this.yaml = YAML.stringify(this.hash);
     }
+
+    SerializeArrayToYaml.prototype._expect_template_input_array = function(origin_array) {
+      var expect_template_input_array, i, item, len;
+      expect_template_input_array = [];
+      for (i = 0, len = origin_array.length; i < len; i++) {
+        item = origin_array[i];
+        if (!item.name.match(/\[-1\]/)) {
+          expect_template_input_array.push(item);
+        }
+      }
+      return expect_template_input_array;
+    };
 
     SerializeArrayToYaml.prototype._array_to_hash = function(array) {
       var hash, i, item, len, name, names;
@@ -118,9 +132,8 @@
   YamlToForm = (function() {
     function YamlToForm(config) {
       this.config = this._init_config(config);
-      console.log("@config");
-      console.log(this.config);
       this.form_dom = this._init_form_dom();
+      this._init_event();
     }
 
     YamlToForm.prototype._init_config = function(config) {
@@ -170,7 +183,7 @@
     };
 
     YamlToForm.prototype._init_form_dom = function() {
-      return this.form_dom = jQuery("<form action='javascript:;'> " + (this._generate_init_form_input_dom()) + " </form>");
+      return this.form_dom = jQuery("<form class='yaml-to-form' action='javascript:;'> " + (this._generate_init_form_input_dom()) + " <div class='temp'> </div> </form>");
     };
 
     YamlToForm.prototype._generate_init_form_input_dom = function() {
@@ -178,7 +191,7 @@
     };
 
     YamlToForm.prototype._generate_init_form_input_dom_nested = function(scope, config_hash) {
-      var dom_str, dom_str_arr, key, new_scope, value;
+      var dom_str, dom_str_arr, key, new_key, new_scope, template_dom_str, template_key, template_scope, value;
       dom_str_arr = [];
       for (key in config_hash) {
         value = config_hash[key];
@@ -186,10 +199,14 @@
         dom_str = (function() {
           switch (value.format) {
             case "array":
-              key = key + "[0]";
-              new_scope.push(key);
+              template_scope = new_scope.slice();
+              new_key = key + "[0]";
+              new_scope.push(new_key);
               dom_str = this._generate_init_form_input_dom_nested(new_scope, value.value);
-              return "<div class='form-group-array' data-index='0'> <div class='form-template'> " + dom_str + " </div> <a class='btn btn-default' href='javascript:;'>增加</a> <ul> <li>" + dom_str + "</li> </ul> </div>";
+              template_key = key + "[-1]";
+              template_scope.push(template_key);
+              template_dom_str = this._generate_init_form_input_dom_nested(template_scope, value.value);
+              return "<div class='form-group-array'> <div class='form-template'> " + template_dom_str + " </div> <ul> <li data-index='0'>" + dom_str + "</li> </ul> <a class='btn btn-default add' href='javascript:;'>增加</a> </div>";
             case "hash":
               new_scope.push(key);
               dom_str = this._generate_init_form_input_dom_nested(new_scope, value.value);
@@ -216,6 +233,91 @@
       return dom_str_arr.join(" ");
     };
 
+    YamlToForm.prototype._init_event = function() {
+      var that;
+      that = this;
+      return jQuery(document).on('click', 'form.yaml-to-form a.add', function() {
+        var arr, form_group_array, new_ele_index_arr, new_index, new_li, template, template_dom;
+        form_group_array = jQuery(this).closest('.form-group-array');
+        new_ele_index_arr = [];
+        that._get_new_ele_index_arr(new_ele_index_arr, form_group_array);
+        new_ele_index_arr[new_ele_index_arr.length - 1] += 1;
+        arr = new_ele_index_arr.slice();
+        new_index = new_ele_index_arr[new_ele_index_arr.length - 1];
+        template = form_group_array.find(".form-template").html();
+        template_dom = that._new_ele_dom(template, arr);
+        new_li = jQuery("<li data-index='" + new_index + "'></li>");
+        new_li.append(template_dom);
+        return form_group_array.find(">ul").append(new_li);
+      });
+    };
+
+    YamlToForm.prototype._new_ele_dom = function(template, new_ele_index_arr) {
+      var template_dom, that;
+      template_dom = jQuery(template);
+      template_dom.appendTo(this.form_dom.find(".temp"));
+      that = this;
+      this.form_dom.find(".temp").find(".form-group input.form-control").each(function() {
+        var arr, form_group, label, name, new_name;
+        form_group = jQuery(this).closest(".form-group");
+        label = form_group.find("label").text();
+        name = form_group.find("input").attr("name");
+        arr = new_ele_index_arr.slice();
+        new_name = that._get_new_name_by_new_index(name, arr);
+        form_group.find("input").attr("name", new_name);
+        if (name === label) {
+          return form_group.find("label").text(new_name);
+        }
+      });
+      this.form_dom.find(".temp").find(".checkbox label input").each(function() {
+        var arr, checkbox, label, name, new_name;
+        checkbox = jQuery(this).closest(".checkbox");
+        label = checkbox.find("label span").text();
+        name = checkbox.find("input").attr("name");
+        arr = new_ele_index_arr.slice();
+        new_name = that._get_new_name_by_new_index(name, arr);
+        checkbox.find("input").attr("name", new_name);
+        if (name === label) {
+          return checkbox.find("label span").text(new_name);
+        }
+      });
+      this.form_dom.find(".temp").find(".form-group textarea.form-control").each(function() {
+        var arr, form_group, label, name, new_name;
+        form_group = jQuery(this).closest(".form-group");
+        label = form_group.find("label").text();
+        name = form_group.find("textarea").attr("name");
+        arr = new_ele_index_arr.slice();
+        new_name = that._get_new_name_by_new_index(name, arr);
+        form_group.find("textarea").attr("name", new_name);
+        if (name === label) {
+          return form_group.find("label").text(new_name);
+        }
+      });
+      return template_dom;
+    };
+
+    YamlToForm.prototype._get_new_name_by_new_index = function(name, new_ele_index_arr) {
+      var index;
+      while (new_ele_index_arr.length > 0) {
+        index = new_ele_index_arr.shift();
+        name = name.replace(/\[[^_\]]*\]/, "[_" + index + "_]");
+      }
+      name = name.replace(/\[_([^\]])_\]/g, "[$1]");
+      return name;
+    };
+
+    YamlToForm.prototype._get_new_ele_index_arr = function(new_ele_index_arr, form_group_array) {
+      var last_li;
+      last_li = form_group_array.find('ul li:last-child');
+      if (last_li !== void 0) {
+        new_ele_index_arr.unshift(parseInt(last_li.attr('data-index')));
+      }
+      form_group_array = form_group_array.parent().closest('.form-group-array');
+      if (form_group_array.length > 0) {
+        return this._get_new_ele_index_arr(new_ele_index_arr, form_group_array);
+      }
+    };
+
     YamlToForm.prototype.render_to = function($ele) {
       jQuery(this.form_dom).appendTo($ele);
       return this;
@@ -224,6 +326,7 @@
     YamlToForm.prototype.get_string = function() {
       var sat;
       sat = new SerializeArrayToYaml(this.form_dom.serializeArray());
+      window.sat = sat;
       return sat.yaml;
     };
 
@@ -235,6 +338,7 @@
     var config, ytf;
     config = YAML.load(yaml_url);
     ytf = new YamlToForm(config);
+    window.ytf = ytf;
     return fun(ytf);
   };
 

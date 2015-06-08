@@ -48,7 +48,8 @@ BuildFormUtil =
       <div class='checkbox'>
         <input name='#{key}' type='hidden' value='false' />
         <label>
-          <input name='#{key}' type='checkbox' value='true' #{default_value_str}> #{label}
+          <input name='#{key}' type='checkbox' value='true' #{default_value_str}>
+          <span>#{label}</span>
         </label>
       </div>
     "
@@ -83,8 +84,17 @@ BuildFormUtil =
 # 把 jQuery(form).SerializeArray() 获取的数据转化成 yaml
 class SerializeArrayToYaml
   constructor: (array)->
-    @hash = @_array_to_hash(array)
+    @origin_array = array
+    @expect_template_input_array = @_expect_template_input_array(@origin_array)
+    @hash = @_array_to_hash(@expect_template_input_array)
     @yaml = YAML.stringify(@hash)
+
+  _expect_template_input_array: (origin_array)->
+    expect_template_input_array = []
+    for item in origin_array
+      if !item.name.match(/\[-1\]/)
+        expect_template_input_array.push item
+    expect_template_input_array
 
   _array_to_hash: (array)->
     hash = {}
@@ -115,9 +125,8 @@ class SerializeArrayToYaml
 class YamlToForm
   constructor: (config)->
     @config   = @_init_config config
-    console.log "@config"
-    console.log @config
     @form_dom = @_init_form_dom()
+    @_init_event()
 
   # date:
   #   format: time
@@ -200,8 +209,10 @@ class YamlToForm
       regex:         if res[4] then res[5]
 
   _init_form_dom: ->
-    @form_dom = jQuery "<form action='javascript:;'>
+    @form_dom = jQuery "<form class='yaml-to-form' action='javascript:;'>
       #{@_generate_init_form_input_dom()}
+      <div class='temp'>
+      </div>
     </form>"
 
   _generate_init_form_input_dom: ->
@@ -213,18 +224,23 @@ class YamlToForm
       new_scope = scope.slice()
       dom_str = switch value.format
         when "array"
-          key = "#{key}[0]"
-          new_scope.push(key)
+          template_scope = new_scope.slice()
+          new_key = "#{key}[0]"
+          new_scope.push(new_key)
           dom_str = @_generate_init_form_input_dom_nested(new_scope, value.value)
+
+          template_key = "#{key}[-1]"
+          template_scope.push(template_key)
+          template_dom_str = @_generate_init_form_input_dom_nested(template_scope, value.value)
           "
-            <div class='form-group-array' data-index='0'>
+            <div class='form-group-array'>
               <div class='form-template'>
-                #{dom_str}
+                #{template_dom_str}
               </div>
-              <a class='btn btn-default' href='javascript:;'>增加</a>
               <ul>
-                <li>#{dom_str}</li>
+                <li data-index='0'>#{dom_str}</li>
               </ul>
+              <a class='btn btn-default add' href='javascript:;'>增加</a>
             </div>
           "
         when "hash"
@@ -253,18 +269,90 @@ class YamlToForm
       dom_str_arr.push dom_str
     dom_str_arr.join " "
 
+  _init_event: ()->
+    that = this
+    jQuery(document).on 'click', 'form.yaml-to-form a.add', ->
+      # form-group-array
+      form_group_array = jQuery(this).closest('.form-group-array')
+      # 获取新创建的元素应该的角标数组
+      new_ele_index_arr = []
+      that._get_new_ele_index_arr(new_ele_index_arr, form_group_array)
+      new_ele_index_arr[new_ele_index_arr.length-1] += 1
+      # 获取新创建的 dom
+      arr = new_ele_index_arr.slice()
+      new_index = new_ele_index_arr[new_ele_index_arr.length-1]
+      template = form_group_array.find(".form-template").html()
+      template_dom = that._new_ele_dom(template, arr)
+      # 插入dom到 li
+      new_li = jQuery("
+        <li data-index='#{new_index}'></li>
+      ")
+      new_li.append template_dom
+      form_group_array.find(">ul").append new_li
+
+  _new_ele_dom: (template, new_ele_index_arr)->
+    template_dom = jQuery(template)
+    template_dom.appendTo @form_dom.find(".temp")
+    that = this
+    @form_dom.find(".temp").find(".form-group input.form-control").each ->
+      form_group = jQuery(this).closest(".form-group")
+      label = form_group.find("label").text()
+      name = form_group.find("input").attr("name")
+      arr = new_ele_index_arr.slice()
+      new_name = that._get_new_name_by_new_index(name, arr)
+      form_group.find("input").attr("name", new_name)
+      if name == label
+        form_group.find("label").text(new_name)
+
+    @form_dom.find(".temp").find(".checkbox label input").each ->
+      checkbox = jQuery(this).closest(".checkbox")
+      label = checkbox.find("label span").text()
+      name  = checkbox.find("input").attr("name")
+      arr = new_ele_index_arr.slice()
+      new_name = that._get_new_name_by_new_index(name, arr)
+      checkbox.find("input").attr("name", new_name)
+      if name == label
+        checkbox.find("label span").text(new_name)
+
+    @form_dom.find(".temp").find(".form-group textarea.form-control").each ->
+      form_group = jQuery(this).closest(".form-group")
+      label = form_group.find("label").text()
+      name = form_group.find("textarea").attr("name")
+      arr = new_ele_index_arr.slice()
+      new_name = that._get_new_name_by_new_index(name, arr)
+      form_group.find("textarea").attr("name", new_name)
+      if name == label
+        form_group.find("label").text(new_name)
+    template_dom
+
+  _get_new_name_by_new_index: (name, new_ele_index_arr)->
+    while new_ele_index_arr.length > 0
+      index = new_ele_index_arr.shift()
+      name = name.replace /\[[^_\]]*\]/, "[_#{index}_]"
+    name = name.replace /\[_([^\]])_\]/g, "[$1]"
+    name
+
+  _get_new_ele_index_arr: (new_ele_index_arr, form_group_array)->
+    last_li = form_group_array.find('ul li:last-child')
+    if last_li != undefined then new_ele_index_arr.unshift parseInt(last_li.attr('data-index'))
+    form_group_array = form_group_array.parent().closest('.form-group-array')
+    if form_group_array.length > 0
+      @_get_new_ele_index_arr(new_ele_index_arr, form_group_array)
+
   render_to: ($ele)->
     jQuery(@form_dom).appendTo($ele)
     return this
 
   get_string: ()->
     sat = new SerializeArrayToYaml(@form_dom.serializeArray())
+    window.sat = sat
     sat.yaml
 
 YamlToForm.load_config = (yaml_url, fun)->
   # 读取 yaml 配置
   config = YAML.load(yaml_url)
   ytf = new YamlToForm(config)
+  window.ytf = ytf
   fun(ytf)
 
 window.YamlToForm = YamlToForm
