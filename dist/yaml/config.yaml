@@ -6,3 +6,17 @@ members:
       - thread: string
         items: 
           - desc: text
+            priority: integer
+            willbedone: boolean
+            timealloc: integer
+    end:
+      - thread: string
+        items:
+          - desc: string
+            isdone: boolean
+            timeused: integer
+            submits:
+              - name: string
+                link: string
+                comment: text
+                note: text
