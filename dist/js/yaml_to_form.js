@@ -1,5 +1,5 @@
 (function() {
-  var BuildFormUtil, SerializeArrayToYaml, YamlToForm, YamlUtil;
+  var BuildFormUtil, FormParamsBuilder, YamlToForm, YamlUtil;
 
   YamlUtil = {
     get_type: function(obj) {
@@ -64,15 +64,12 @@
     }
   };
 
-  SerializeArrayToYaml = (function() {
-    function SerializeArrayToYaml(array) {
-      this.origin_array = array;
-      this.expect_template_input_array = this._expect_template_input_array(this.origin_array);
-      this.hash = this._array_to_hash(this.expect_template_input_array);
-      this.yaml = YAML.stringify(this.hash);
+  FormParamsBuilder = (function() {
+    function FormParamsBuilder(form_dom) {
+      this.form_dom = form_dom;
     }
 
-    SerializeArrayToYaml.prototype._expect_template_input_array = function(origin_array) {
+    FormParamsBuilder.prototype._expect_template_input_array = function(origin_array) {
       var expect_template_input_array, i, item, len;
       expect_template_input_array = [];
       for (i = 0, len = origin_array.length; i < len; i++) {
@@ -84,7 +81,7 @@
       return expect_template_input_array;
     };
 
-    SerializeArrayToYaml.prototype._array_to_hash = function(array) {
+    FormParamsBuilder.prototype._array_to_hash = function(array) {
       var hash, i, item, len, name, names;
       hash = {};
       for (i = 0, len = array.length; i < len; i++) {
@@ -100,7 +97,7 @@
       return hash;
     };
 
-    SerializeArrayToYaml.prototype._set_value_to_hash = function(hash, names, value) {
+    FormParamsBuilder.prototype._set_value_to_hash = function(hash, names, value) {
       var arr, data, index, name;
       data = hash;
       while (names.length > 1) {
@@ -125,7 +122,77 @@
       return data[names[0]] = value;
     };
 
-    return SerializeArrayToYaml;
+    FormParamsBuilder.prototype._check_value_for_input_or_textarea = function(ele, item) {
+      var control_label, format, presence, regex;
+      jQuery(ele).closest(".form-group").find(".error-info").remove();
+      presence = jQuery(ele).attr("data-presence");
+      regex = jQuery(ele).attr("data-regex");
+      format = jQuery(ele).attr("data-format");
+      if (presence === "true" && jQuery.trim(item.value).length === 0) {
+        control_label = jQuery(ele).closest(".form-group").find(".control-label");
+        control_label.after("<span class='error-info'>内容不能为空</span>");
+        return false;
+      }
+      if (jQuery.trim(item.value).length !== 0) {
+        switch (format) {
+          case "integer":
+            if (parseInt(item.value).toString() !== item.value) {
+              control_label = jQuery(ele).closest(".form-group").find(".control-label");
+              control_label.after("<span class='error-info'>内容必须是数字</span>");
+              return false;
+            }
+            break;
+          case "time":
+            if (!item.value.match(/[0-9]{4}-[0-1][0-9]-[0-3][0-9]/)) {
+              control_label = jQuery(ele).closest(".form-group").find(".control-label");
+              control_label.after("<span class='error-info'>内容必须是时间格式</span>");
+              return false;
+            }
+        }
+        if (regex && !item.value.match(eval(regex))) {
+          control_label = jQuery(ele).closest(".form-group").find(".control-label");
+          control_label.after("<span class='error-info'>内容格式错误</span>");
+          return false;
+        }
+      }
+      return true;
+    };
+
+    FormParamsBuilder.prototype._validate_expect_template_input_array = function(expect_template_input_array) {
+      var ele, i, input, item, len, name, textarea, valid, validate;
+      validate = true;
+      for (i = 0, len = expect_template_input_array.length; i < len; i++) {
+        item = expect_template_input_array[i];
+        name = item.name;
+        input = jQuery("input[type='text'][name='" + name + "']").get(0);
+        textarea = jQuery("textarea[type='text'][name='" + name + "']").get(0);
+        if (input && textarea) {
+          throw '出现未知错误';
+        }
+        ele = input || textarea;
+        valid = this._check_value_for_input_or_textarea(ele, item);
+        if (!valid) {
+          validate = false;
+        }
+      }
+      return validate;
+    };
+
+    FormParamsBuilder.prototype.validate = function() {
+      this.origin_array = this.form_dom.serializeArray();
+      this.expect_template_input_array = this._expect_template_input_array(this.origin_array);
+      if (this._validate_expect_template_input_array(this.expect_template_input_array)) {
+        this.hash = this._array_to_hash(this.expect_template_input_array);
+        this.yaml = YAML.stringify(this.hash);
+        return true;
+      } else {
+        this.hash = {};
+        this.yaml = "";
+        return false;
+      }
+    };
+
+    return FormParamsBuilder;
 
   })();
 
@@ -323,11 +390,16 @@
       return this;
     };
 
+    YamlToForm.prototype.validate = function() {
+      this.sat = this.sat || new FormParamsBuilder(this.form_dom);
+      return this.sat.validate();
+    };
+
     YamlToForm.prototype.get_string = function() {
-      var sat;
-      sat = new SerializeArrayToYaml(this.form_dom.serializeArray());
-      window.sat = sat;
-      return sat.yaml;
+      if (this.validate()) {
+        return this.sat.yaml;
+      }
+      return "";
     };
 
     return YamlToForm;

@@ -82,12 +82,8 @@ BuildFormUtil =
     "
 
 # 把 jQuery(form).SerializeArray() 获取的数据转化成 yaml
-class SerializeArrayToYaml
-  constructor: (array)->
-    @origin_array = array
-    @expect_template_input_array = @_expect_template_input_array(@origin_array)
-    @hash = @_array_to_hash(@expect_template_input_array)
-    @yaml = YAML.stringify(@hash)
+class FormParamsBuilder
+  constructor: (@form_dom)->
 
   _expect_template_input_array: (origin_array)->
     expect_template_input_array = []
@@ -121,6 +117,65 @@ class SerializeArrayToYaml
         if data[name] == undefined then data[name] = {}
         data = data[name]
     data[names[0]] = value
+
+  _check_value_for_input_or_textarea: (ele, item)->
+    jQuery(ele).closest(".form-group").find(".error-info").remove()
+
+    presence = jQuery(ele).attr("data-presence")
+    regex    = jQuery(ele).attr("data-regex")
+    format   = jQuery(ele).attr("data-format")
+
+    if presence == "true" && jQuery.trim(item.value).length == 0
+      # 增加不能为空的提示
+      control_label = jQuery(ele).closest(".form-group").find(".control-label")
+      control_label.after("<span class='error-info'>内容不能为空</span>")
+      return false
+
+    if jQuery.trim(item.value).length != 0
+      switch format
+        when "integer"
+          if parseInt(item.value).toString() != item.value
+            control_label = jQuery(ele).closest(".form-group").find(".control-label")
+            control_label.after("<span class='error-info'>内容必须是数字</span>")
+            return false
+        when "time"
+          if !item.value.match(/[0-9]{4}-[0-1][0-9]-[0-3][0-9]/)
+            control_label = jQuery(ele).closest(".form-group").find(".control-label")
+            control_label.after("<span class='error-info'>内容必须是时间格式</span>")
+            return false
+
+      if regex && !item.value.match(eval(regex))
+        control_label = jQuery(ele).closest(".form-group").find(".control-label")
+        control_label.after("<span class='error-info'>内容格式错误</span>")
+        return false
+
+    return true
+
+  _validate_expect_template_input_array: (expect_template_input_array)->
+    validate = true
+    for item in expect_template_input_array
+
+      name = item.name
+      input = jQuery("input[type='text'][name='#{name}']").get(0)
+      textarea = jQuery("textarea[type='text'][name='#{name}']").get(0)
+
+      throw '出现未知错误' if input && textarea
+      ele = (input || textarea)
+      valid = @_check_value_for_input_or_textarea(ele, item)
+      validate = false if !valid
+    validate
+
+  validate: ()->
+    @origin_array = @form_dom.serializeArray()
+    @expect_template_input_array = @_expect_template_input_array(@origin_array)
+    if @_validate_expect_template_input_array(@expect_template_input_array)
+      @hash = @_array_to_hash(@expect_template_input_array)
+      @yaml = YAML.stringify(@hash)
+      true
+    else
+      @hash = {}
+      @yaml = ""
+      false
 
 class YamlToForm
   constructor: (config)->
@@ -343,10 +398,13 @@ class YamlToForm
     jQuery(@form_dom).appendTo($ele)
     return this
 
+  validate: ()->
+    @sat = (@sat || new FormParamsBuilder(@form_dom))
+    @sat.validate()
+
   get_string: ()->
-    sat = new SerializeArrayToYaml(@form_dom.serializeArray())
-    window.sat = sat
-    sat.yaml
+    return @sat.yaml if @validate()
+    ""
 
 YamlToForm.load_config = (yaml_url, fun)->
   # 读取 yaml 配置
