@@ -14,7 +14,8 @@ options =
     js: "src/js/**/*.coffee"
     html: "src/demo/**/*.haml"
     yaml: "src/yaml/**/*.yaml"
-    # css:  "src/css/"
+    scss_path:  "src/scss/"
+    scss:  "src/scss/**/**.scss"
     css:  "src/css/**/*.css"
   dist:
     js: "dist/js"
@@ -43,20 +44,22 @@ gulp.task "yaml", ->
   gulp.src options.src.yaml
     .pipe gulp.dest(options.dist.yaml)
 
-# gulp.task "css", ->
-#   return sass options.src.css
-#   .on "error", (err)->
-#     console.error "Error!", err.message
-#   .pipe gulp.dest(options.dist.css)
+gulp.task "scss", ->
+  return sass options.src.scss_path
+  .on "error", (err)->
+    console.error "Error!", err.message
+  .pipe gulp.dest(options.dist.css)
+
 gulp.task "css", ->
   gulp.src options.src.css
     .pipe gulp.dest(options.dist.css)
 
 
-gulp.task "build", ["js", "html", "yaml", "css"]
+gulp.task "build", ["js", "html", "yaml", "scss", "css"]
 
 gulp.task 'watch', ['build'], ->
   gulp.watch options.src.js, ['js']
   gulp.watch options.src.html, ['html']
   gulp.watch options.src.yaml, ['yaml']
   gulp.watch options.src.css, ['css']
+  gulp.watch options.src.scss, ['scss']

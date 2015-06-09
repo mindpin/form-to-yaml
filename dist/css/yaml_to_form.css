@@ -1,9 +1,8 @@
-.form-array{
+form .form-array {
   padding: 15px;
-  border-bottom: 1px solid;
-}
-
-.form-template{
-  display: none;
-}
-
+  border-bottom: 1px solid; }
+form .form-template {
+  display: none; }
+form .error-info {
+  background-color: #ff0000;
+  color: #fff; }
